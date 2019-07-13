@@ -10,6 +10,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Xml;
+using System.Xml.Linq;
 
 namespace AndLayoutInspector
 {
@@ -22,10 +23,14 @@ namespace AndLayoutInspector
         public FormMain()
         {
             InitializeComponent();
+            ScanSnapshots();
+        }
+
+        private void ScanSnapshots()
+        {
+            cbSnapshoth.Items.Clear();
             if (Directory.Exists(sSnapsnotFolder))
-            {
                 cbSnapshoth.Items.AddRange(Directory.GetDirectories(sSnapsnotFolder));
-            }
         }
 
         private void BtnCapture_Click(object sender, EventArgs e)
@@ -51,6 +56,7 @@ namespace AndLayoutInspector
 
         private async Task CaptureAsync()
         {
+            btnCapture.Enabled = false;
             try
             {
                 var devices = AdbClient.Instance.GetDevices();
@@ -66,8 +72,7 @@ namespace AndLayoutInspector
                 var end = dump.LastIndexOf(endToken);
                 dump = dump.Substring(0, end + endToken.Length);
 
-                XmlDocument doc = new XmlDocument();
-                doc.LoadXml(dump);
+                XDocument doc = XDocument.Parse(dump);
 
                 var screen = await AdbClient.Instance.GetFrameBufferAsync(device, CancellationToken.None);
                 if (screen.Height < screen.Width)
@@ -82,6 +87,7 @@ namespace AndLayoutInspector
                 _snapshot = new Snapshot() { Tree = doc, Image = screen };
 
                 Display(_snapshot);
+                cbSnapshoth.Items.Add(dir);
             }
             catch (Exception e)
             {
@@ -89,6 +95,7 @@ namespace AndLayoutInspector
                 MessageBox.Show(e.Message);
 
             }
+            btnCapture.Enabled = true;
         }
 
         private void Display(Snapshot snapshot)
@@ -145,8 +152,7 @@ namespace AndLayoutInspector
         {
             try
             {
-                XmlDocument doc = new XmlDocument();
-                doc.Load(Path.Combine(cbSnapshoth.Text, "layout.xml"));
+                XDocument doc = XDocument.Load(Path.Combine(cbSnapshoth.Text, "layout.xml"));
                 var screen = Image.FromFile(Path.Combine(cbSnapshoth.Text, "screen.png"));
                 _snapshot = new Snapshot() { Tree = doc, Image = screen };
                 propertyGrid.SelectedObject = null;
@@ -159,16 +165,14 @@ namespace AndLayoutInspector
         }
 
 
-        private void DisplayTree(XmlDocument dom)
+        private void DisplayTree(XDocument dom)
         {
             try
             {
                 treeView.SelectedNode = null;
                 treeView.Nodes.Clear();
-                foreach (XmlNode node in dom.DocumentElement.ChildNodes)
+                foreach (var node in dom.Root.Elements().Where(t => t.NodeType == XmlNodeType.Element))
                 {
-                    if (node.Name == "namespace" && node.ChildNodes.Count == 0)
-                        continue;
                     AddNode(treeView.Nodes, node);
                 }
 
@@ -182,31 +186,32 @@ namespace AndLayoutInspector
 
         class NodeInfo
         {
-            public NodeInfo(XmlNode node)
+            public NodeInfo(XElement node)
             {
                 xml = node;
                 bounds = xml.GetBounds();
             }
-            public XmlNode xml;
+            public XElement xml;
             public Rectangle? bounds;
         }
 
-        private void AddNode(TreeNodeCollection nodes, XmlNode inXmlNode)
+        private void AddNode(TreeNodeCollection nodes, XElement inXmlNode)
         {
-            string text = $"{inXmlNode.Attributes.GetNamedItem("class").Value} [{inXmlNode.Attributes.GetNamedItem("resource-id").Value}]";
-            var label = inXmlNode.Attributes.GetNamedItem("text")?.Value ?? "";
+            string text = inXmlNode.Attribute("class")?.Value ?? "";
+
+            var resourceId = inXmlNode.Attribute("resource-id")?.Value;
+            if (!string.IsNullOrEmpty(resourceId))
+                text += $" [{resourceId}]";
+
+            var label = inXmlNode.Attribute("text")?.Value ?? "";
             if (!string.IsNullOrEmpty(label))
-                text += $"({label})";
+                text += $" ({label})";
+
             TreeNode newNode = nodes.Add(text);
             newNode.Tag = new NodeInfo(inXmlNode);
-            if (inXmlNode.HasChildNodes)
+            foreach (var node in inXmlNode.Elements().Where(t => t.NodeType == XmlNodeType.Element))
             {
-                XmlNodeList nodeList = inXmlNode.ChildNodes;
-                for (int i = 0; i <= nodeList.Count - 1; i++)
-                {
-                    XmlNode xNode = inXmlNode.ChildNodes[i];
-                    AddNode(newNode.Nodes, xNode);
-                }
+                AddNode(newNode.Nodes, node);
             }
         }
 
@@ -219,7 +224,7 @@ namespace AndLayoutInspector
         private void SelectNode(NodeInfo node)
         {
             if (null != node)
-                propertyGrid.SelectedObject = new XmlNodeWrapper(node.xml);
+                propertyGrid.SelectedObject = new DictionaryPropertyGridAdapter(node.xml.Attributes().ToDictionary(km => km.Name, km => km.Value));
             else
                 propertyGrid.SelectedObject = null;
             DisplayImage(_snapshot);
@@ -240,10 +245,9 @@ namespace AndLayoutInspector
 
         private TreeNode FindNode(Point pos, TreeNodeCollection nodes)
         {
-            System.Collections.IList list = nodes;
-            for (int i = list.Count - 1; i >= 0; --i)
+            for (int i = nodes.Count - 1; i >= 0; --i)
             {
-                TreeNode node = (TreeNode)list[i];
+                TreeNode node = nodes[i];
                 if (false == (node.Tag as NodeInfo)?.bounds?.Contains(pos))
                     continue;
                 if (0 != node.Nodes.Count)
