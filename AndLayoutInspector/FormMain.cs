@@ -6,6 +6,7 @@ using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -64,7 +65,7 @@ namespace AndLayoutInspector
                 if (null == device)
                     return;
                 var d = new Dumper();
-                await AdbClient.Instance.ExecuteRemoteCommandAsync("uiautomator dump /dev/tty", device, d, CancellationToken.None, -1);
+                await AdbClient.Instance.ExecuteRemoteCommandAsync("uiautomator dump /dev/tty", device, d, CancellationToken.None, -1, Encoding.UTF8);
                 var dump = d.Lines.FirstOrDefault();
                 if (string.IsNullOrEmpty(dump))
                     return;
