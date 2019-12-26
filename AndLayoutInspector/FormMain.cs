@@ -80,7 +80,7 @@ namespace AndLayoutInspector
                     screen.RotateFlip(RotateFlipType.Rotate90FlipNone);
 
                 // Save capture
-                var dir = Path.Combine(sSnapsnotFolder, DateTime.Now.ToString("yyyy_M_dd_hh_mm_ss"));
+                var dir = Path.Combine(sSnapsnotFolder, DateTime.Now.ToString("yyyy_MM_dd_hh_mm_ss"));
                 Directory.CreateDirectory(dir);
                 screen.Save(Path.Combine(dir, "screen.png"), ImageFormat.Png);
                 File.WriteAllText(Path.Combine(dir, "layout.xml"), dump);
