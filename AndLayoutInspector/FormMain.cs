@@ -76,8 +76,6 @@ namespace AndLayoutInspector
                 XDocument doc = XDocument.Parse(dump);
 
                 var screen = await AdbClient.Instance.GetFrameBufferAsync(device, CancellationToken.None);
-                if (screen.Height < screen.Width)
-                    screen.RotateFlip(RotateFlipType.Rotate90FlipNone);
 
                 // Save capture
                 var dir = Path.Combine(sSnapsnotFolder, DateTime.Now.ToString("yyyy_MM_dd_hh_mm_ss"));
