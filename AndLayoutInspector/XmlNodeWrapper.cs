@@ -10,7 +10,8 @@ namespace AndLayoutInspector
     {
         private readonly XmlNode node;
 
-        public XmlNodeWrapper(XmlNode node) {
+        public XmlNodeWrapper(XmlNode node)
+        {
             this.node = node;
         }
 
@@ -39,6 +40,7 @@ namespace AndLayoutInspector
                 }
                 return new PropertyDescriptorCollection(props.ToArray(), true);
             }
+
             public override object ConvertTo(ITypeDescriptorContext context, System.Globalization.CultureInfo culture, object value, Type destinationType)
             {
                 return destinationType == typeof(string)
@@ -46,14 +48,16 @@ namespace AndLayoutInspector
                     : base.ConvertTo(context, culture, value, destinationType);
             }
         }
+
         class XmlNodeWrapperPropertyDescriptor : PropertyDescriptor
         {
-            private static readonly Attribute[] nix = new Attribute[0];
+            private static readonly Attribute[] nix = Array.Empty<Attribute>();
             private readonly XmlNode node;
             public XmlNodeWrapperPropertyDescriptor(XmlNode node) : base(GetName(node), nix)
             {
                 this.node = node;
             }
+
             static string GetName(XmlNode node)
             {
                 switch (node.NodeType)
@@ -65,22 +69,27 @@ namespace AndLayoutInspector
                     default: return node.NodeType + ":" + node.Name;
                 }
             }
+
             public override bool ShouldSerializeValue(object component)
             {
                 return false;
             }
+
             public override void SetValue(object component, object value)
             {
                 node.Value = (string)value;
             }
+
             public override bool CanResetValue(object component)
             {
                 return !IsReadOnly;
             }
+
             public override void ResetValue(object component)
             {
                 SetValue(component, "");
             }
+
             public override Type PropertyType
             {
                 get
@@ -94,6 +103,7 @@ namespace AndLayoutInspector
                     }
                 }
             }
+
             public override bool IsReadOnly
             {
                 get
@@ -108,6 +118,7 @@ namespace AndLayoutInspector
                     }
                 }
             }
+
             public override object GetValue(object component)
             {
                 switch (node.NodeType)
@@ -118,9 +129,10 @@ namespace AndLayoutInspector
                         return node.Value;
                 }
             }
+
             public override Type ComponentType
             {
-                get { return typeof(XmlNodeWrapper); }
+                get => typeof(XmlNodeWrapper);
             }
         }
     }

@@ -19,7 +19,8 @@ namespace AndLayoutInspector
     {
         private Snapshot _snapshot;
 
-        const string sSnapsnotFolder = "snapshots";
+        private const string sSnapsnotFolder = "snapshots";
+        private const int ScreenshotWidth = 479;
 
         public FormMain()
         {
@@ -36,12 +37,12 @@ namespace AndLayoutInspector
 
         private void BtnCapture_Click(object sender, EventArgs e)
         {
-            CaptureAsync();
+            _ = CaptureAsync();
         }
 
         class Dumper : IShellOutputReceiver
         {
-            public List<string> Lines = new List<string>();
+            public readonly List<string> Lines = new List<string>();
             public bool ParsesErrors => false;
 
             public void AddOutput(string line)
@@ -83,9 +84,7 @@ namespace AndLayoutInspector
                 screen.Save(Path.Combine(dir, "screen.png"), ImageFormat.Png);
                 File.WriteAllText(Path.Combine(dir, "layout.xml"), dump);
 
-                _snapshot = new Snapshot() { Tree = doc, Image = screen };
-
-                Display(_snapshot);
+                Display(new Snapshot() { Tree = doc, Image = screen });
                 cbSnapshoth.Items.Add(dir);
             }
             catch (Exception e)
@@ -94,11 +93,15 @@ namespace AndLayoutInspector
                 MessageBox.Show(e.Message);
 
             }
-            btnCapture.Enabled = true;
+            finally
+            {
+                btnCapture.Enabled = true;
+            }
         }
 
         private void Display(Snapshot snapshot)
         {
+            _snapshot = snapshot;
             DisplayImage(snapshot);
             DisplayTree(snapshot.Tree);
         }
@@ -130,7 +133,7 @@ namespace AndLayoutInspector
             if (bmp.Height < bmp.Width)
                 bmp.RotateFlip(RotateFlipType.Rotate90FlipNone);
 
-            imgScreen.Height = 479 * bmp.Height / bmp.Width;
+            imgScreen.Height = ScreenshotWidth * bmp.Height / bmp.Width;
             imgScreen.Image = bmp;
         }
 
@@ -153,9 +156,8 @@ namespace AndLayoutInspector
             {
                 XDocument doc = XDocument.Load(Path.Combine(cbSnapshoth.Text, "layout.xml"));
                 var screen = Image.FromFile(Path.Combine(cbSnapshoth.Text, "screen.png"));
-                _snapshot = new Snapshot() { Tree = doc, Image = screen };
                 propertyGrid.SelectedObject = null;
-                Display(_snapshot);
+                Display(new Snapshot() { Tree = doc, Image = screen });
             }
             catch (Exception ex)
             {
@@ -163,9 +165,28 @@ namespace AndLayoutInspector
             }
         }
 
-
         private void DisplayTree(XDocument dom)
         {
+            void AddNode(TreeNodeCollection nodes, XElement inXmlNode)
+            {
+                string text = inXmlNode.Attribute("class")?.Value ?? "";
+
+                var resourceId = inXmlNode.Attribute("resource-id")?.Value;
+                if (!string.IsNullOrEmpty(resourceId))
+                    text += $" [{resourceId}]";
+
+                var label = inXmlNode.Attribute("text")?.Value ?? "";
+                if (!string.IsNullOrEmpty(label))
+                    text += $" ({label})";
+
+                TreeNode newNode = nodes.Add(text);
+                newNode.Tag = new NodeInfo(inXmlNode);
+                foreach (var node in inXmlNode.Elements().Where(t => t.NodeType == XmlNodeType.Element))
+                {
+                    AddNode(newNode.Nodes, node);
+                }
+            }
+
             try
             {
                 treeView.SelectedNode = null;
@@ -190,28 +211,8 @@ namespace AndLayoutInspector
                 xml = node;
                 bounds = xml.GetBounds();
             }
-            public XElement xml;
-            public Rectangle? bounds;
-        }
-
-        private void AddNode(TreeNodeCollection nodes, XElement inXmlNode)
-        {
-            string text = inXmlNode.Attribute("class")?.Value ?? "";
-
-            var resourceId = inXmlNode.Attribute("resource-id")?.Value;
-            if (!string.IsNullOrEmpty(resourceId))
-                text += $" [{resourceId}]";
-
-            var label = inXmlNode.Attribute("text")?.Value ?? "";
-            if (!string.IsNullOrEmpty(label))
-                text += $" ({label})";
-
-            TreeNode newNode = nodes.Add(text);
-            newNode.Tag = new NodeInfo(inXmlNode);
-            foreach (var node in inXmlNode.Elements().Where(t => t.NodeType == XmlNodeType.Element))
-            {
-                AddNode(newNode.Nodes, node);
-            }
+            public readonly XElement xml;
+            public readonly Rectangle? bounds;
         }
 
         private void TreeView_AfterSelect(object sender, TreeViewEventArgs e)
@@ -242,20 +243,17 @@ namespace AndLayoutInspector
 
         }
 
-        private TreeNode FindNode(Point pos, TreeNodeCollection nodes)
+        private static TreeNode FindNode(Point pos, TreeNodeCollection nodes)
         {
             for (int i = nodes.Count - 1; i >= 0; --i)
             {
                 TreeNode node = nodes[i];
                 if (false == (node.Tag as NodeInfo)?.bounds?.Contains(pos))
                     continue;
-                if (0 != node.Nodes.Count)
-                {
-                    var inNode = FindNode(pos, node.Nodes);
-                    if (null != inNode)
-                        return inNode;
-                }
-                return node;
+                if (0 == node.Nodes.Count)
+                    return node;
+                var inNode = FindNode(pos, node.Nodes);
+                return inNode ?? node;
             }
             return null;
         }
